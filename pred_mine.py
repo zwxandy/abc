@@ -9,8 +9,7 @@ import numpy as np
 import random
 import argparse
 # from llama_flash_attn_monkey_patch import replace_llama_attn_with_flash_attn
-from llama_flash_attn_monkey_patch_compression import replace_llama_attn_with_flash_attn  # zwx
-# from llama_flash_attn_monkey_patch_compression_streamingllm import replace_llama_attn_with_flash_attn  # zwx
+from llama_flash_attn_monkey_patch_compression import replace_llama_attn_with_flash_attn
 import torch.distributed as dist
 import torch.multiprocessing as mp
 import inspect
@@ -56,9 +55,7 @@ def post_process(response, model_name):
 def get_pred(rank, world_size, data, max_length, max_gen, prompt_format, dataset, device, model_name, model2path, out_path):
     device = torch.device(f'cuda:{rank}')
     model, tokenizer = load_model_and_tokenizer(model2path[model_name], model_name, device)
-    # 获取加载的模型类
     model_class = type(model)
-    # 获取模型类定义所在的文件路径
     model_source_file = inspect.getsourcefile(model_class)
     print('model_source_file:', model_source_file)
     context_length_list = []
@@ -164,7 +161,7 @@ if __name__ == '__main__':
         datasets = ["narrativeqa", "qasper", "multifieldqa_en", "multifieldqa_zh", "hotpotqa", "2wikimqa", "musique", \
                     "dureader", "gov_report", "qmsum", "multi_news", "vcsum", "trec", "triviaqa", "samsum", "lsht", \
                     "passage_count", "passage_retrieval_en", "passage_retrieval_zh", "lcc", "repobench-p"]
-        datasets = ["hotpotqa"]  # zwx
+        datasets = ["hotpotqa"]
     # we design specific prompt format and max generation length for each task, feel free to modify them to optimize model output
     dataset2prompt = json.load(open("config/dataset2prompt.json", "r"))
     dataset2maxlen = json.load(open("config/dataset2maxlen.json", "r"))
