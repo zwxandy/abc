@@ -13,9 +13,9 @@ from einops import rearrange
 from flash_attn.flash_attn_interface import flash_attn_varlen_qkvpacked_func
 from flash_attn.bert_padding import unpad_input, pad_input
 
-global_static_ratio = []
+static_ratio = []
 record_static_ratio = []
-global_dynamic_ratio = []
+dynamic_ratio = []
 
 def forward(
         self,
@@ -87,9 +87,9 @@ def forward(
         ratio1 = 0.5
         ratio2 = 0.2
         # 1st level: s=32
-        group_size1 = 32
-        group_size2 = 16
-        b_max, b_min, num_padding_token = group_key_min_max(key_states_evict_static, group_size=group_size1)
+        cluster_size1 = 32
+        cluster_size2 = 16
+        b_max, b_min, num_padding_token = group_key_min_max(key_states_evict_static, group_size=cluster_size1)
         sim = torch.sum((alpha * query_states * b_max + (1 - alpha) * query_states * b_min), dim=-1).unsqueeze(2)
         
         new_mask = torch.full((1, query_states.shape[1], 1, 1), fill_value=torch.finfo(query_states.dtype).min).to(query_states.device)  # (1, H, 1, 1)
@@ -101,13 +101,13 @@ def forward(
         sink_group_idx = torch.full((topk.shape[0], topk.shape[1], 1, 1), fill_value=0).to(topk)
         topk = torch.concat([topk, sink_group_idx], dim=-1)
         #  keep the last group
-        if key_states_evict_static.shape[-2] % group_size1 != 0:
+        if key_states_evict_static.shape[-2] % cluster_size1 != 0:
             last_group_idx = torch.full((topk.shape[0], topk.shape[1], 1, 1), fill_value=b_max.shape[2]-1).to(topk)
             topk = torch.concat([topk, last_group_idx], dim=-1)
 
         # 2nd level: s=16
         topk_gs16 = groupidx_to_groupidx(topk, gap=2)
-        b_max, b_min, num_padding_token = group_key_min_max(key_states_evict_static, group_size=group_size2)
+        b_max, b_min, num_padding_token = group_key_min_max(key_states_evict_static, group_size=cluster_size2)
         group_mask = torch.full((1, b_max.shape[1], 1, b_max.shape[2]), fill_value=torch.finfo(query_states.dtype).min).to(query_states.device)
         topk_gs16[topk_gs16 > group_mask.shape[-1] - 1] = group_mask.shape[-1] - 1
         group_mask.scatter_(-1, topk_gs16, 0)
@@ -119,11 +119,11 @@ def forward(
         sink_group_idx = torch.full((topk.shape[0], topk.shape[1], 1, 1), fill_value=0).to(topk)
         topk = torch.concat([topk, sink_group_idx], dim=-1)
         # keep the last group
-        if key_states_evict_static.shape[-2] % group_size1 != 0:
+        if key_states_evict_static.shape[-2] % cluster_size1 != 0:
             last_group_idx = torch.full((topk.shape[0], topk.shape[1], 1, 1), fill_value=b_max.shape[2]-1).to(topk)
             topk = torch.concat([topk, last_group_idx], dim=-1)
         # set the dynamic mask
-        topk = groupidx_to_tokenidx(topk, b_max.shape[2], group_size=group_size2)
+        topk = groupidx_to_tokenidx(topk, b_max.shape[2], group_size=cluster_size2)
         topk[topk > self.attn_dynamic_mask.shape[-1] - 1] -= num_padding_token
         self.attn_dynamic_mask.scatter_(-1, topk.unsqueeze(0).unsqueeze(2), 0)
         
@@ -152,10 +152,10 @@ def forward(
 
         # upcast attention to fp32
         attn_weights = nn.functional.softmax(attn_weights, dim=-1, dtype=torch.float32).to(query_states.dtype)
-        global_dynamic_ratio.append((1 - attn_weights[0, 0, 0].tolist().count(0) / attn_weights.shape[-1]) * 100)
-        if len(global_dynamic_ratio) == 32:
-            print(f'Dynamic selection ratio: {sum(global_dynamic_ratio) / 32}%')
-            global_dynamic_ratio.clear()
+        dynamic_ratio.append((1 - attn_weights[0, 0, 0].tolist().count(0) / attn_weights.shape[-1]) * 100)
+        if len(dynamic_ratio) == 32:
+            print(f'Dynamic selection ratio: {sum(dynamic_ratio) / 32}%')
+            dynamic_ratio.clear()
         
         attn_output = torch.matmul(attn_weights, value_states_evict_static)
 
@@ -203,12 +203,12 @@ def forward(
         self.base_dynamic_mask = torch.full((1, last_attn_weights.shape[1], 1, ic_token_idx.shape[0]), fill_value=torch.finfo(last_attn_weights.dtype).min).to(last_attn_weights.device)
 
     if ic_token_idx is None:
-        global_static_ratio.append(100 * self.ic_token_idx.shape[0] / q_len)
+        static_ratio.append(100 * self.ic_token_idx.shape[0] / q_len)
     else:
-        global_static_ratio.append(100 * ic_token_idx.shape[0] / q_len)
-    if len(global_static_ratio) == 32:
-        record_static_ratio.append(sum(global_static_ratio) / 32)
-        global_static_ratio.clear()
+        static_ratio.append(100 * ic_token_idx.shape[0] / q_len)
+    if len(static_ratio) == 32:
+        record_static_ratio.append(sum(static_ratio) / 32)
+        static_ratio.clear()
     if 0 < len(record_static_ratio) <= 100 and len(record_static_ratio) % 10 == 0:
         print(f'Static remained ratio: {sum(record_static_ratio) / len(record_static_ratio)}%')
 
