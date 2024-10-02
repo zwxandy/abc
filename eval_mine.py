@@ -43,7 +43,7 @@ def parse_args(args=None):
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', type=str, default=None)
     parser.add_argument('--e', action='store_true', help="Evaluate on LongBench-E")
-    parser.add_argument('--path', type=str, default='/home/mengli/LongBench/pred_mine/longchat-v1.5-7b-32k/triviaqa_2024-08-04_20-03-10.jsonl')
+    parser.add_argument('--path', type=str, default='')
     return parser.parse_args(args)
 
 def scorer_e(dataset, predictions, answers, lengths, all_classes):
