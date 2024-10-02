@@ -1,11 +1,4 @@
-![](misc/logo.gif)
-<p align="center">
-    🤗 <a href="https://huggingface.co/datasets/THUDM/LongBench" target="_blank">HF Repo</a> • 📃 <a href="https://arxiv.org/abs/2308.14508" target="_blank">Paper</a>
-</p>
-
-阅读[中文版本](README_ZH.md).
-
-# 📖 LongBench: A Bilingual, Multitask Benchmark for Long Context Understanding
+# MPCache: MPC-Friendly KV Cache Eviction for Efficient Private LLM Inference
 
 **LongBench** is the first benchmark for bilingual, multitask, and comprehensive assessment of **long context understanding** capabilities of large language models. LongBench includes different languages (Chinese and English) to provide a more comprehensive evaluation of the large models' multilingual capabilities on long contexts. In addition, LongBench is composed of six major categories and twenty one different tasks, covering key long-text application scenarios such as single-document QA, multi-document QA, summarization, few-shot learning, synthetic tasks and code completion.
 
