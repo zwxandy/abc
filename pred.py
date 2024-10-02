@@ -53,9 +53,7 @@ def post_process(response, model_name):
 def get_pred(rank, world_size, data, max_length, max_gen, prompt_format, dataset, device, model_name, model2path, out_path):
     device = torch.device(f'cuda:{rank}')
     model, tokenizer = load_model_and_tokenizer(model2path[model_name], model_name, device)
-    # 获取加载的模型类
     model_class = type(model)
-    # 获取模型类定义所在的文件路径
     model_source_file = inspect.getsourcefile(model_class)
     print('model_source_file:', model_source_file)
     for json_obj in tqdm(data):
