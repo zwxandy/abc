@@ -41,10 +41,12 @@ datasets = ["hotpotqa"]  # chosen dataset
 
 **Model file and configuration:**
 
-The KV cache eviction algorithm is implemented in llama_flash_attn_monkey_patch_compression.py.
+The main code of KV cache eviction algorithm is implemented in llama_flash_attn_monkey_patch_compression.py.
 For hierarchical clustering, `alpha` controls the ratio between $\mathbf r^{\min}$ and $\mathbf r^{\max}$.
 `cluster_size1` and `cluster_size2` control the granularities of two levels.
 `ratio1` and `ratio2` control the dynamic selection ratio at the 1st level and the final dynamic selection ratio, respectively.
+
+Layer-wise index sharing is implemented in modeling_llama.py, and we provide the modified file in this repo. To enable layer-wise index sharing, you can simply replace the original modeling_llama.py with ours.
 
 **Model inference and evaluation:**
 
