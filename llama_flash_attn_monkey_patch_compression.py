@@ -85,7 +85,7 @@ def forward(
         # hierarchical clustering
         alpha = 0.6
         ratio1 = 0.5
-        ratio2 = 0.2
+        ratio2 = 0.4
         # 1st level: s=32
         cluster_size1 = 32
         cluster_size2 = 16
@@ -195,7 +195,8 @@ def forward(
     last_attn_weights_head_mean = torch.mean(last_attn_weights, dim=1, keepdim=False)
     is_important = torch.zeros_like(last_attn_weights_head_mean)
     is_important[last_attn_weights_head_mean >= static_threshold] = 1
-    self.ic_token_idx = torch.nonzero(~torch.all(is_important[0, :, :] == 0, dim=0))
+    accum_sum = torch.sum(is_important[0, :, :], dim=0, keepdim=False)
+    self.ic_token_idx = torch.argwhere(accum_sum > 0)
 
     if ic_token_idx is None:
         self.base_dynamic_mask = torch.full((1, last_attn_weights.shape[1], 1, self.ic_token_idx.shape[0]), fill_value=torch.finfo(last_attn_weights.dtype).min).to(last_attn_weights.device)
