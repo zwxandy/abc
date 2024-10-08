@@ -54,7 +54,7 @@ def post_process(response, model_name):
 
 def get_pred(rank, world_size, data, max_length, max_gen, prompt_format, dataset, device, model_name, model2path, out_path):
     device = torch.device(f'cuda:{rank}')
-    model, tokenizer = load_model_and_tokenizer(model2path[model_name], model_name, device)
+    model, tokenizer = load_model_and_tokenizer(model2path[model_name], model_name, device, dataset)
     model_class = type(model)
     model_source_file = inspect.getsourcefile(model_class)
     print('model_source_file:', model_source_file)
@@ -116,7 +116,7 @@ def seed_everything(seed):
     torch.backends.cudnn.deterministic = True
     torch.cuda.manual_seed_all(seed)
 
-def load_model_and_tokenizer(path, model_name, device):
+def load_model_and_tokenizer(path, model_name, device, dataset):
     if "chatglm" in model_name or "internlm" in model_name or "xgen" in model_name:
         tokenizer = AutoTokenizer.from_pretrained(path, trust_remote_code=True)
         model = AutoModelForCausalLM.from_pretrained(path, trust_remote_code=True, torch_dtype=torch.bfloat16).to(device)
@@ -126,7 +126,7 @@ def load_model_and_tokenizer(path, model_name, device):
         model = LlamaForCausalLM.from_pretrained(path, torch_dtype=torch.bfloat16).to(device)
     elif "longchat" in model_name or "vicuna" in model_name:
         from fastchat.model import load_model
-        replace_llama_attn_with_flash_attn()  # MUST
+        replace_llama_attn_with_flash_attn(dataset)  # MUST
         model, _ = load_model(
             path,
             device='cpu',
