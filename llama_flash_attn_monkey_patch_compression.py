@@ -16,6 +16,9 @@ from flash_attn.bert_padding import unpad_input, pad_input
 static_ratio = []
 record_static_ratio = []
 dynamic_ratio = []
+dataset = None
+is_print_static = True
+is_print_dynamic = True
 
 def forward(
         self,
@@ -34,6 +37,8 @@ def forward(
 
     attention_mask: [bsz, q_len]
     """
+    global dataset, is_print_static, is_print_dynamic
+    
     bsz, q_len, _ = hidden_states.size()
 
     query_states = self.q_proj(hidden_states).view(bsz, q_len, self.num_heads, self.head_dim).transpose(1, 2)
@@ -84,11 +89,13 @@ def forward(
         
         # hierarchical clustering
         alpha = 0.6
-        ratio1 = 0.5
-        ratio2 = 0.4
-        # 1st level: s=32
-        cluster_size1 = 32
-        cluster_size2 = 16
+        ratio1 = 0.5  # 1st level selection ratio
+        ratio2 = 0.2  # final dynamic selection ratio
+        cluster_size1 = 32  # 1st level: s=32
+        cluster_size2 = 16  # 2st level: s=16
+        if is_print_dynamic:
+            print(f'Dynamic selection ratio: {ratio2 * 100}%')
+            # is_print_dynamic = False
         b_max, b_min, num_padding_token = group_key_min_max(key_states_evict_static, group_size=cluster_size1)
         sim = torch.sum((alpha * query_states * b_max + (1 - alpha) * query_states * b_min), dim=-1).unsqueeze(2)
         
@@ -153,9 +160,9 @@ def forward(
         # upcast attention to fp32
         attn_weights = nn.functional.softmax(attn_weights, dim=-1, dtype=torch.float32).to(query_states.dtype)
         dynamic_ratio.append((1 - attn_weights[0, 0, 0].tolist().count(0) / attn_weights.shape[-1]) * 100)
-        if len(dynamic_ratio) == 32:
-            print(f'Dynamic selection ratio: {sum(dynamic_ratio) / 32}%')
-            dynamic_ratio.clear()
+        # if len(dynamic_ratio) == 32:
+        #     print(f'Dynamic selection ratio: {sum(dynamic_ratio) / 32}%')
+        #     dynamic_ratio.clear()
         
         attn_output = torch.matmul(attn_weights, value_states_evict_static)
 
@@ -191,7 +198,7 @@ def forward(
         last_attn_weights = torch.matmul(query_states[:, :, -int(key_states.shape[2]*0.2):, :], key_states.transpose(-1, -2))
     last_attn_weights = nn.functional.softmax(last_attn_weights, dim=-1, dtype=torch.float32).to(query_states.dtype)
     self.attn_static_mask = torch.zeros(1, 1, 1, last_attn_weights.shape[-1]).to(last_attn_weights.device)
-    static_threshold = 1e-8
+    static_threshold = 1e-8  # hotpotqa
     last_attn_weights_head_mean = torch.mean(last_attn_weights, dim=1, keepdim=False)
     is_important = torch.zeros_like(last_attn_weights_head_mean)
     is_important[last_attn_weights_head_mean >= static_threshold] = 1
@@ -210,8 +217,12 @@ def forward(
     if len(static_ratio) == 32:
         record_static_ratio.append(sum(static_ratio) / 32)
         static_ratio.clear()
-    if 0 < len(record_static_ratio) <= 100 and len(record_static_ratio) % 10 == 0:
-        print(f'Static remained ratio: {sum(record_static_ratio) / len(record_static_ratio)}%')
+    # if 0 < len(record_static_ratio) <= 100 and len(record_static_ratio) % 10 == 0:
+    #     print(f'Static remained ratio: {sum(record_static_ratio) / len(record_static_ratio)}%')
+    if is_print_static:
+        if dataset == 'hotpotqa' and is_print_static:
+            print(f'Remained ratio after static eviction: 30%')
+            is_print_static = False
 
     if key_padding_mask is None:
         qkv = rearrange(qkv, 'b s ... -> (b s) ...')
@@ -303,7 +314,9 @@ def _prepare_decoder_attention_mask(self, attention_mask, input_shape,
                                                                                               past_key_values_length)
 
 
-def replace_llama_attn_with_flash_attn():
+def replace_llama_attn_with_flash_attn(ds):
     print('use FlashAttention')
+    global dataset
+    dataset = ds
     transformers.models.llama.modeling_llama.LlamaModel._prepare_decoder_attention_mask = _prepare_decoder_attention_mask
     transformers.models.llama.modeling_llama.LlamaAttention.forward = forward
