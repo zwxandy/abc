@@ -28,7 +28,7 @@ Install the required packages with pip tool:
 ```bash
 pip install -r requirements.txt
 ```
-For LLaMA-2-based model inference on long sequences, we follow use FlashAttention during the prefill stage for saving GPU memory.
+For LLaMA-2-based model inference on long sequences, we follow the optimization of FlashAttention during the prefill stage for saving GPU memory.
 The relevant dependencies can be installed according to the codebase of [FlashAttention](https://github.com/Dao-AILab/flash-attention).
 
 **Dataset choice:**
@@ -52,8 +52,7 @@ For hierarchical clustering, the variable `alpha` controls the ratio between $\m
 
 Layer-wise index sharing is implemented in `modeling_llama.py`, and we provide the modified file in this repo. To enable layer-wise index sharing, you can simply replace the original `modeling_llama.py` with ours.
 
-Take the hotpotqa dataset for example, we prune 70\% tokens (preserve 30\%) on average for static eviction, and setting `ratio2=0.2` means a final KV cache budget of 6\%.
-
+We give an example on the hotpotqa dataset here, 70\% tokens are pruned (i.e., 30\% preserved) on average after static eviction based on the accumulated attention sum (refer to H2O and SnapKV); set `ratio2=0.1` for a final KV cache budget of 3\%, `ratio2=0.2` for a final KV cache budget of 6\%, `ratio2=0.4` for a final KV cache budget of 12\%.
 
 **Model inference and evaluation:**
 
@@ -65,8 +64,9 @@ You can also run inference on multi-gpus in parallel (one model per gpu):
 ```bash
 CUDA_VISIBLE_DEVICES=0,1,2,3 python pred_mine.py --model longchat-v1.5-7b-32k
 ```
-Then, we can obtain the inference output of the model on the LongBench datasets under the `pred_mine/` folder corresponding to the model name:
-After the inference, we can run `eval_mine.py` to evaluate the model performance:
+Then, you can obtain the inference output of the model on the dataset under the `pred_mine/` folder corresponding to the model name.
+
+After the inference, run `eval_mine.py` to evaluate the model performance (no need of GPU):
 ```bash
 python eval_mine.py --model longchat-v1.5-7b-32k
 ```
